@@ -1,9 +1,9 @@
-﻿
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Common;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
@@ -14,7 +14,6 @@ using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Tasks;
 using statistics;
-using statistics.Calculators;
 using statistics.Configuration;
 using statistics.Models.Configuration;
 using Statistics.Api;
@@ -23,7 +22,7 @@ using Statistics.ViewModel;
 
 namespace Statistics.ScheduledTasks
 {
-    public class CalculateStatsTask : IScheduledTask
+    public class CalculateStatsTask : IScheduledTask 
     {
         private readonly IFileSystem _fileSystem;
         private readonly IHttpClient _httpClient;
@@ -33,12 +32,13 @@ namespace Statistics.ScheduledTasks
         private readonly IUserDataManager _userDataManager;
         private readonly IUserManager _userManager;
         private readonly IZipClient _zipClient;
+        private IApplicationHost _appHost;
 
         public CalculateStatsTask(ILogManager logger,
             IUserManager userManager,
             IUserDataManager userDataManager,
             ILibraryManager libraryManager, IZipClient zipClient, IHttpClient httpClient, IFileSystem fileSystem,
-            IServerApplicationPaths serverApplicationPaths)
+            IServerApplicationPaths serverApplicationPaths, IApplicationHost appHost)
         {
             _logger = logger.GetLogger("Statistics");
             _libraryManager = libraryManager;
@@ -48,6 +48,7 @@ namespace Statistics.ScheduledTasks
             _httpClient = httpClient;
             _fileSystem = fileSystem;
             _serverApplicationPaths = serverApplicationPaths;
+            _appHost = appHost;
         }
 
         private static PluginConfiguration PluginConfiguration => Plugin.Instance.Configuration;
@@ -78,6 +79,7 @@ namespace Statistics.ScheduledTasks
             var numComplete = 0;
 
             PluginConfiguration.LastUpdated = DateTime.Now.ToString("g");
+            PluginConfiguration.ServerId = _appHost.SystemId;
 
             numComplete++;
             progress.Report(percentPerUser * numComplete);
@@ -154,10 +156,18 @@ namespace Statistics.ScheduledTasks
                 PluginConfiguration.NewestMovie = calculator.CalculateNewestMovie();
                 PluginConfiguration.HighestRating = calculator.CalculateHighestRating();
                 PluginConfiguration.LowestRating = calculator.CalculateLowestRating();
+                PluginConfiguration.NewestAddedMovie = calculator.CalculateNewestAddedMovie();
+                PluginConfiguration.HighestBitrateMovie = calculator.CalculateHighestBitrateMovie();
+                PluginConfiguration.LowestBitrateMovie = calculator.CalculateLowestBitrateMovie();
 
                 PluginConfiguration.TotalShows = calculator.CalculateTotalShows();
                 PluginConfiguration.TotalOwnedEpisodes = calculator.CalculateTotalOwnedEpisodes();
                 PluginConfiguration.TotalShowStudios = calculator.CalculateTotalShowStudios();
+                PluginConfiguration.BiggestShow = calculator.CalculateBiggestShow();
+                PluginConfiguration.LongestShow = calculator.CalculateLongestShow();
+                PluginConfiguration.OldestShow = calculator.CalculateOldestShow();
+                PluginConfiguration.NewestShow = calculator.CalculateNewestShow();
+                PluginConfiguration.NewestAddedEpisode = calculator.CalculateNewestAddedEpisode();
 
                 PluginConfiguration.MovieQualityItems = calculator.CalculateMovieQualityList();
             }
@@ -190,11 +200,25 @@ namespace Statistics.ScheduledTasks
             //first run
             if (string.IsNullOrEmpty(time))
             {
-                callFailed = FirstTvdbConnection(calculator, seriesIdsInLibrary, cancellationToken);
+                try
+                {
+                    callFailed = FirstTvdbConnection(calculator, seriesIdsInLibrary, cancellationToken);
+                }
+                catch
+                {
+                    callFailed = false;
+                }
             }
             else
             {
-                callFailed = UpdateTvdbConnection(calculator, time, seriesIdsInLibrary, cancellationToken);
+                try
+                {
+                    callFailed = UpdateTvdbConnection(calculator, time, seriesIdsInLibrary, cancellationToken);
+                }
+                catch
+                {
+                    callFailed = false;
+                }
             }
 
             PluginConfiguration.TotalEpisodeCounts.LastUpdateTime = calculator.GetServerTime(cancellationToken);
@@ -202,7 +226,7 @@ namespace Statistics.ScheduledTasks
             Plugin.Instance.SaveConfiguration();
         }
 
-        private bool FirstTvdbConnection(ShowProgressCalculator calculator, IEnumerable<string> seriesIdsInLibrary, CancellationToken cancellationToken )
+        private bool FirstTvdbConnection(ShowProgressCalculator calculator, IEnumerable<string> seriesIdsInLibrary, CancellationToken cancellationToken)
         {
             var totals = calculator.CalculateTotalEpisodes(seriesIdsInLibrary, cancellationToken);
             PluginConfiguration.TotalEpisodeCounts.IdList = totals;
@@ -226,7 +250,7 @@ namespace Statistics.ScheduledTasks
 
             foreach (var showId in updatedList)
             {
-                PluginConfiguration.TotalEpisodeCounts.IdList.First(x => x.ShowId == showId).Count = updatedTotals.First(x => x.ShowId == showId).Count;
+                PluginConfiguration.TotalEpisodeCounts.IdList.FirstOrDefault<UpdateShowModel>(x => x.ShowId == showId).Count = updatedTotals.FirstOrDefault<UpdateShowModel>(x => x.ShowId == showId).Count;
             }
 
             var newTotals = calculator.CalculateTotalEpisodes(newShows, cancellationToken);
@@ -235,7 +259,7 @@ namespace Statistics.ScheduledTasks
 
             foreach (var showId in newShows)
             {
-                PluginConfiguration.TotalEpisodeCounts.IdList.Add(new UpdateShowModel(showId, newTotals.First(x => x.ShowId == showId).Count));
+                PluginConfiguration.TotalEpisodeCounts.IdList.Add(new UpdateShowModel(showId, newTotals.FirstOrDefault<UpdateShowModel>(x => x.ShowId == showId).Count));
             }
 
             return false;
@@ -249,7 +273,7 @@ namespace Statistics.ScheduledTasks
                 TimeOfDayTicks = TimeSpan.FromHours(0).Ticks
             }; //12am
 
-            return new[] {trigger};
+            return new[] { trigger };
         }
     }
 }

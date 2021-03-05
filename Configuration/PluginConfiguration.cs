@@ -28,17 +28,22 @@ namespace statistics.Configuration
         public ValueGroup NewestMovie { get; set; }
         public ValueGroup HighestRating { get; set; }
         public ValueGroup LowestRating { get; set; }
-        //public ValueGroup NewestAddedMovie { get; set; }
+        public ValueGroup NewestAddedMovie { get; set; }
+        public ValueGroup HighestBitrateMovie { get; set; }
+        public ValueGroup LowestBitrateMovie { get; set; }
 
         public ValueGroup TotalShows { get; set; }
         public ValueGroup TotalOwnedEpisodes { get; set; }
         public ValueGroup TotalShowStudios { get; set; }
-        //public ValueGroup BiggestShow { get; set; }
-        //public ValueGroup LongestShow { get; set; }
-        //public ValueGroup NewestAddedEpisode { get; set; }
+        public ValueGroup BiggestShow { get; set; }
+        public ValueGroup LongestShow { get; set; }
+        public ValueGroup NewestAddedEpisode { get; set; }
+        public ValueGroup OldestShow { get; set; }
+        public ValueGroup NewestShow { get; set; }
 
         public string LastUpdated { get; set; }
         public string Version { get; set; }
+        public string ServerId { get; set; }
 
         public List<MovieQuality> MovieQualityItems { get; set; }
 
